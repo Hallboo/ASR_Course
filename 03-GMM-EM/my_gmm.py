@@ -68,23 +68,23 @@ class GMM(object):
         return np.array(gama_Znk)
 
     def update_sigma(self, X, gama_Znk, Nk, mu_new):
-        temp = []
+        sigma_new = []
         for k in range(self.K):
-            sums = np.zeros((self.dim, self.dim))
+            accu = np.zeros((self.dim, self.dim))
             for n in range(X.shape[0]):
                 diff = X[n] - mu_new[k]
                 diff = diff.reshape(self.dim, 1)
-                sums+= gama_Znk[n][k] * np.dot(diff, diff.T)
-            temp.append(sums)
-        Nk = np.array([t*np.ones((self.dim,self.dim)) for t in Nk])
-        return np.array(temp)/Nk
+                accu+= gama_Znk[n][k] * np.dot(diff, diff.T)
+            sigma_new.append(accu/Nk[k])
+        return np.array(sigma_new)
 
     def update_mu(self, X, gama_Znk, Nk):
-        mu_new = np.zeros((self.K, self.dim))
-        sums = np.zeros((self.K, self.dim))
+        accu = np.zeros((self.K, self.dim))
         for n in range(X.shape[0]):
-            sums+=np.dot(gama_Znk[n].reshape(self.K,1), X[n].reshape(1,self.dim))
-        return sums/(np.dot(Nk.reshape(self.K,1), np.ones((1,self.dim))))
+            accu+=np.dot(gama_Znk[n].reshape(self.K,1), X[n].reshape(1,self.dim))
+        Nk = Nk.reshape(self.K, 1) + np.zeros((self.dim))
+        # expend to the shape of (K,dim)
+        return accu/Nk
 
     def em_estimator(self, X):
 
@@ -117,6 +117,33 @@ def train(gmms, num_iterations = num_iterations):
                 target, i, log_llh))
     return gmms
 
+def train2(gmms, num_iterations = num_iterations):
+    dict_utt2feat, dict_target2utt = read_feats_and_targets(
+            'train/feats.scp', 'train/text')
+   
+    for i in range(num_iterations):
+        for target in targets:
+            feats = get_feats(target, dict_utt2feat, dict_target2utt)   #
+            log_llh = gmms[target].em_estimator(feats)
+            print("Target:{} iteration:{} likelyhood:{}".format(
+                target, i, log_llh))
+    return gmms
+
+def train3(gmms, num_iterations = num_iterations):
+    dict_utt2feat, dict_target2utt = read_feats_and_targets(
+            'train/feats.scp', 'train/text')
+   
+    epochs = 3
+    for e in range(epochs):
+        for target in targets:
+            feats = get_feats(target, dict_utt2feat, dict_target2utt)   #
+            for i in range(num_iterations):
+                log_llh = gmms[target].em_estimator(feats)
+                print("Epoch:{} Target:{} iteration:{} likelyhood:{}".format(
+                    e,target, i, log_llh))
+    return gmms
+
+
 def test(gmms):
     correction_num = 0
     error_num = 0
@@ -144,7 +171,7 @@ def main():
     gmms = {}
     for target in targets:
         gmms[target] = GMM(39, num_gaussian, 'train/feats.scp')
-    gmms = train(gmms)
+    gmms = train3(gmms)
     acc = test(gmms)
     print('Recognition accuracy: %f' % acc)
     fid = open('acc.txt', 'w')
